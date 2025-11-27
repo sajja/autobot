@@ -18,19 +18,22 @@ class LidarReading:
 class RotatingLidar:
     """
     Rotating LIDAR sensor for 360-degree mapping.
-    Scans at 10Hz (10 times per second).
+    Maximum range: 5 meters.
+    Scans at configurable frequency (default: 1Hz).
     """
     
-    def __init__(self, scan_frequency: float = 10.0, resolution: int = 360):
+    def __init__(self, scan_frequency: float = 1.0, resolution: int = 360, max_range: float = 5.0):
         """
         Initialize the LIDAR sensor.
         
         Args:
-            scan_frequency: Scanning frequency in Hz (default: 10Hz)
+            scan_frequency: Scanning frequency in Hz (default: 1Hz)
             resolution: Number of points per 360-degree scan (default: 360)
+            max_range: Maximum detection range in meters (default: 5.0m)
         """
         self.scan_frequency = scan_frequency
         self.resolution = resolution
+        self.max_range = max_range
         self.scan_period = 1.0 / scan_frequency
         self._is_scanning = False
         self._current_angle = 0.0
@@ -78,10 +81,12 @@ class RotatingLidar:
             Tuple of (distance in meters, intensity 0-255)
         """
         import random
-        # Placeholder implementation - simulate some variation
-        base_distance = 1.2
-        distance = base_distance + random.uniform(-0.05, 0.05)
-        intensity = int(120 + random.uniform(-10, 10))
+        # Placeholder implementation - simulate distance within max_range
+        # Vary distance between 1m and max_range (10m)
+        distance = random.uniform(1.0, self.max_range)
+        # Intensity decreases with distance (simulated)
+        base_intensity = 200 - int((distance / self.max_range) * 100)
+        intensity = max(50, min(255, int(base_intensity + random.uniform(-20, 20))))
         return distance, intensity
     
     @property

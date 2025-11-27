@@ -45,15 +45,16 @@ class Environment:
     """
     Represents the environment where the bot operates.
     Uses a grid-based coordinate system with continuous positions.
+    Default size is 25m x 25m (larger than LIDAR's 10m range).
     """
     
-    def __init__(self, width: float = 10.0, height: float = 10.0, resolution: float = 0.1):
+    def __init__(self, width: float = 25.0, height: float = 25.0, resolution: float = 0.1):
         """
         Initialize the environment.
         
         Args:
-            width: Width of the environment in meters (default: 10.0m)
-            height: Height of the environment in meters (default: 10.0m)
+            width: Width of the environment in meters (default: 25.0m)
+            height: Height of the environment in meters (default: 25.0m)
             resolution: Grid resolution in meters (default: 0.1m)
         """
         self.width = width
@@ -328,6 +329,13 @@ class Environment:
             bot_y = self.bot_position.y
             bot_size = 0.3  # Bot size in meters
             
+            # Draw LIDAR range circle (5m range)
+            lidar_range = 5.0  # LIDAR max range
+            range_circle = Circle((bot_x, bot_y), lidar_range,
+                                 fill=False, edgecolor='cyan', linewidth=2,
+                                 linestyle='--', alpha=0.6, label='LIDAR Range (5m)')
+            ax.add_patch(range_circle)
+            
             # Draw bot body as a circle
             bot_circle = Circle((bot_x, bot_y), bot_size, 
                                color='blue', alpha=0.7, label='Bot')
@@ -418,11 +426,16 @@ class Environment:
         bot_circle = None
         bot_arrow = None
         bot_text = None
+        lidar_circle = None
         
         if self.bot_position:
             bot_x = self.bot_position.x
             bot_y = self.bot_position.y
             bot_size = 0.3
+            
+            # LIDAR range circle (5m range) - initially None (not visible when stopped)
+            lidar_range = 5.0
+            lidar_circle = None
             
             # Bot starts RED (stopped)
             bot_circle = Circle((bot_x, bot_y), bot_size, 
@@ -457,7 +470,7 @@ class Environment:
         
         # Button click handler
         def on_button_clicked(event):
-            nonlocal bot_running, bot_circle, bot_arrow, bot_text
+            nonlocal bot_running, bot_circle, bot_arrow, bot_text, lidar_circle
             
             if not bot_running:
                 # START BOT
@@ -514,6 +527,19 @@ class Environment:
                             bot_text.set_text(f'Bot (RUNNING)\n({bot_x:.1f}, {bot_y:.1f})\n{self.bot_orientation:.0f}°')
                             bot_text.set_bbox(dict(boxstyle='round', facecolor='lightblue', alpha=0.7))
                     
+                    # Show LIDAR circle in CYAN (active scanning)
+                    if lidar_circle is None:
+                        # Create new LIDAR circle
+                        lidar_circle = Circle((bot_x, bot_y), lidar_range,
+                                            fill=False, edgecolor='cyan', linewidth=2,
+                                            linestyle='--', alpha=0.6, label='LIDAR Range (5m)')
+                        ax.add_patch(lidar_circle)
+                    else:
+                        # Just update existing circle
+                        lidar_circle.set_visible(True)
+                        lidar_circle.set_edgecolor('cyan')
+                        lidar_circle.set_alpha(0.6)
+                    
                     # Update status
                     info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
                     info_text_updated += f"Resolution: {self.resolution}m\n"
@@ -568,6 +594,10 @@ class Environment:
                         if bot_text:
                             bot_text.set_text(f'Bot (STOPPED)\n({bot_x:.1f}, {bot_y:.1f})\n{self.bot_orientation:.0f}°')
                             bot_text.set_bbox(dict(boxstyle='round', facecolor='lightcoral', alpha=0.7))
+                    
+                    # Hide LIDAR circle (inactive - not scanning)
+                    if lidar_circle:
+                        lidar_circle.set_visible(False)
                     
                     # Update status
                     info_box.set_text(f"Grid: {self.grid_width}×{self.grid_height}\n"
