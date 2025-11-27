@@ -11,6 +11,7 @@ class LidarReading:
     
     angle: float  # Angle in degrees (0-360)
     distance: float  # Distance in meters
+    intensity: int  # Signal intensity (0-255)
     timestamp: float  # Timestamp of the reading
 
 
@@ -61,12 +62,12 @@ class RotatingLidar:
         for i in range(self.resolution):
             angle = i * angle_step
             # Placeholder: In real implementation, this would read from actual sensor
-            distance = self._simulate_reading(angle)
-            scan_data.append(LidarReading(angle, distance, current_time))
+            distance, intensity = self._simulate_reading(angle)
+            scan_data.append(LidarReading(angle, distance, intensity, current_time))
         
         return scan_data
     
-    def _simulate_reading(self, angle: float) -> float:
+    def _simulate_reading(self, angle: float) -> Tuple[float, int]:
         """
         Simulate a LIDAR reading (placeholder for actual sensor reading).
         
@@ -74,10 +75,14 @@ class RotatingLidar:
             angle: Angle in degrees
             
         Returns:
-            Simulated distance in meters
+            Tuple of (distance in meters, intensity 0-255)
         """
-        # Placeholder implementation
-        return 5.0  # Default 5 meters
+        import random
+        # Placeholder implementation - simulate some variation
+        base_distance = 1.2
+        distance = base_distance + random.uniform(-0.05, 0.05)
+        intensity = int(120 + random.uniform(-10, 10))
+        return distance, intensity
     
     @property
     def is_scanning(self) -> bool:

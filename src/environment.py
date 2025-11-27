@@ -1,11 +1,12 @@
 """Environment class for the autonomous vehicle simulation."""
 
-from typing import Tuple, List, Optional, Set
+from typing import Tuple, List, Optional, Set, Callable
 from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Circle, Wedge, Rectangle
+from matplotlib.widgets import Button
 
 
 @dataclass
@@ -374,6 +375,218 @@ class Environment:
             plt.show()
         
         return fig, ax
+    
+    def visualize_interactive(self, bot_instance=None, on_start_callback: Optional[Callable] = None) -> None:
+        """
+        Create an interactive visualization with controls.
+        Bot colors: Red (stopped), Blue (running)
+        Button: Red "Start Bot" -> Green "Stop Bot"
+        
+        Args:
+            bot_instance: Optional Bot instance to control
+            on_start_callback: Callback function when Start Bot button is pressed
+        """
+        fig, ax = plt.subplots(figsize=(12, 10))
+        
+        # State variable
+        bot_running = False
+        
+        # Set up the plot
+        ax.set_xlim(0, self.width)
+        ax.set_ylim(0, self.height)
+        ax.set_aspect('equal')
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_xlabel('X (meters)', fontsize=12)
+        ax.set_ylabel('Y (meters)', fontsize=12)
+        ax.set_title(f'Interactive Environment: {self.width}m × {self.height}m', 
+                     fontsize=14, fontweight='bold')
+        
+        # Draw boundary
+        boundary = Rectangle((0, 0), self.width, self.height, 
+                             fill=False, edgecolor='black', linewidth=2)
+        ax.add_patch(boundary)
+        
+        # Draw obstacles
+        for obstacle in self.obstacles:
+            circle = Circle((obstacle.position.x, obstacle.position.y), 
+                           obstacle.radius, 
+                           color='red', alpha=0.6)
+            ax.add_patch(circle)
+            ax.plot(obstacle.position.x, obstacle.position.y, 'rx', markersize=8)
+        
+        # Draw bot if positioned (initially RED - stopped)
+        bot_circle = None
+        bot_arrow = None
+        bot_text = None
+        
+        if self.bot_position:
+            bot_x = self.bot_position.x
+            bot_y = self.bot_position.y
+            bot_size = 0.3
+            
+            # Bot starts RED (stopped)
+            bot_circle = Circle((bot_x, bot_y), bot_size, 
+                               color='red', alpha=0.7, label='Bot (Stopped)')
+            ax.add_patch(bot_circle)
+            
+            arrow_length = bot_size * 1.5
+            dx = arrow_length * np.cos(np.radians(self.bot_orientation))
+            dy = arrow_length * np.sin(np.radians(self.bot_orientation))
+            bot_arrow = ax.arrow(bot_x, bot_y, dx, dy, 
+                                head_width=0.15, head_length=0.1, 
+                                fc='darkred', ec='darkred', linewidth=2)
+            
+            bot_text = ax.text(bot_x, bot_y - bot_size - 0.3, 
+                              f'Bot (STOPPED)\n({bot_x:.1f}, {bot_y:.1f})\n{self.bot_orientation:.0f}°',
+                              ha='center', va='top', fontsize=9, 
+                              bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.7))
+        
+        # Add info text
+        info_text = f"Grid: {self.grid_width}×{self.grid_height}\n"
+        info_text += f"Resolution: {self.resolution}m\n"
+        info_text += f"Obstacles: {len(self.obstacles)}\n"
+        info_text += f"Status: Stopped"
+        
+        info_box = ax.text(0.02, 0.98, info_text, transform=ax.transAxes,
+                          fontsize=9, verticalalignment='top',
+                          bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        # Add Start Bot button (RED initially)
+        ax_button = plt.axes([0.4, 0.02, 0.2, 0.05])
+        btn_control = Button(ax_button, 'Start Bot', color='lightcoral', hovercolor='red')
+        
+        # Button click handler
+        def on_button_clicked(event):
+            nonlocal bot_running, bot_circle, bot_arrow, bot_text
+            
+            if not bot_running:
+                # START BOT
+                print("\n" + "="*60)
+                print("START BOT BUTTON CLICKED!")
+                print("="*60)
+                
+                if bot_instance:
+                    # Initialize bot
+                    if not bot_instance.is_initialized:
+                        bot_instance.initialize()
+                    
+                    # Start LIDAR scan
+                    print("\n--- Starting LIDAR Scan ---")
+                    scan_data = bot_instance.get_lidar_scan()
+                    
+                    # Display scan data in table format
+                    print(f"\nLIDAR Scan Results (Total: {len(scan_data)} readings)")
+                    print(f"Scan Frequency: {bot_instance.lidar.scan_frequency} Hz")
+                    print("-" * 60)
+                    print(f"{'Angle (°)':>12} {'Distance (m)':>15} {'Intensity':>15}")
+                    print("-" * 60)
+                    
+                    # Show first 10, middle 5, and last 10 readings
+                    show_indices = list(range(10)) + list(range(175, 180)) + list(range(350, 360))
+                    
+                    for i in show_indices:
+                        if i < len(scan_data):
+                            reading = scan_data[i]
+                            print(f"{reading.angle:>12.0f} {reading.distance:>15.2f} {reading.intensity:>15}")
+                            if i == 9:
+                                print("..." + " " * 53 + "...")
+                            elif i == 179:
+                                print("..." + " " * 53 + "...")
+                    
+                    print("-" * 60)
+                    print(f"Scan completed at {scan_data[0].timestamp:.2f}")
+                    
+                    # Update bot to BLUE (running)
+                    if bot_circle and self.bot_position:
+                        bot_circle.set_color('blue')
+                        if bot_arrow:
+                            bot_arrow.remove()
+                        bot_x = self.bot_position.x
+                        bot_y = self.bot_position.y
+                        bot_size = 0.3
+                        arrow_length = bot_size * 1.5
+                        dx = arrow_length * np.cos(np.radians(self.bot_orientation))
+                        dy = arrow_length * np.sin(np.radians(self.bot_orientation))
+                        bot_arrow = ax.arrow(bot_x, bot_y, dx, dy, 
+                                           head_width=0.15, head_length=0.1, 
+                                           fc='darkblue', ec='darkblue', linewidth=2)
+                        if bot_text:
+                            bot_text.set_text(f'Bot (RUNNING)\n({bot_x:.1f}, {bot_y:.1f})\n{self.bot_orientation:.0f}°')
+                            bot_text.set_bbox(dict(boxstyle='round', facecolor='lightblue', alpha=0.7))
+                    
+                    # Update status
+                    info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
+                    info_text_updated += f"Resolution: {self.resolution}m\n"
+                    info_text_updated += f"Obstacles: {len(self.obstacles)}\n"
+                    info_text_updated += f"Status: Running\nLIDAR: Active ({len(scan_data)} pts)"
+                    info_box.set_text(info_text_updated)
+                    
+                    # Change button to GREEN "Stop Bot"
+                    btn_control.label.set_text('Stop Bot')
+                    btn_control.color = 'lightgreen'
+                    btn_control.hovercolor = 'green'
+                    
+                    bot_running = True
+                    plt.draw()
+                    
+                    # Call custom callback if provided
+                    if on_start_callback:
+                        on_start_callback(bot_instance, scan_data)
+                else:
+                    print("No bot instance provided!")
+                    info_box.set_text(f"Grid: {self.grid_width}×{self.grid_height}\n"
+                                     f"Resolution: {self.resolution}m\n"
+                                     f"Obstacles: {len(self.obstacles)}\n"
+                                     f"Status: No bot connected!")
+                    plt.draw()
+            
+            else:
+                # STOP BOT
+                print("\n" + "="*60)
+                print("STOP BOT BUTTON CLICKED!")
+                print("="*60)
+                
+                if bot_instance:
+                    # Stop the bot
+                    bot_instance.stop()
+                    print("Bot stopped!")
+                    
+                    # Update bot to RED (stopped)
+                    if bot_circle and self.bot_position:
+                        bot_circle.set_color('red')
+                        if bot_arrow:
+                            bot_arrow.remove()
+                        bot_x = self.bot_position.x
+                        bot_y = self.bot_position.y
+                        bot_size = 0.3
+                        arrow_length = bot_size * 1.5
+                        dx = arrow_length * np.cos(np.radians(self.bot_orientation))
+                        dy = arrow_length * np.sin(np.radians(self.bot_orientation))
+                        bot_arrow = ax.arrow(bot_x, bot_y, dx, dy, 
+                                           head_width=0.15, head_length=0.1, 
+                                           fc='darkred', ec='darkred', linewidth=2)
+                        if bot_text:
+                            bot_text.set_text(f'Bot (STOPPED)\n({bot_x:.1f}, {bot_y:.1f})\n{self.bot_orientation:.0f}°')
+                            bot_text.set_bbox(dict(boxstyle='round', facecolor='lightcoral', alpha=0.7))
+                    
+                    # Update status
+                    info_box.set_text(f"Grid: {self.grid_width}×{self.grid_height}\n"
+                                     f"Resolution: {self.resolution}m\n"
+                                     f"Obstacles: {len(self.obstacles)}\n"
+                                     f"Status: Stopped")
+                    
+                    # Change button to RED "Start Bot"
+                    btn_control.label.set_text('Start Bot')
+                    btn_control.color = 'lightcoral'
+                    btn_control.hovercolor = 'red'
+                    
+                    bot_running = False
+                    plt.draw()
+        
+        btn_control.on_clicked(on_button_clicked)
+        
+        plt.tight_layout()
+        plt.show()
     
     def __repr__(self) -> str:
         """String representation of the environment."""

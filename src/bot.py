@@ -11,15 +11,15 @@ class Bot:
     Autonomous vehicle class with sensors and motor control.
     
     Features:
-    - Rotating LIDAR sensor (10Hz, 360-degree scanning) for mapping
+    - Rotating LIDAR sensor (1Hz, 360-degree scanning) for mapping
     - Sonar sensor for immediate obstacle detection
     - 4 stepper motors for mobility
     """
     
-    def __init__(self):
+    def __init__(self, lidar_frequency: float = 1.0):
         """Initialize the autonomous vehicle bot."""
         # Initialize sensors
-        self.lidar = RotatingLidar(scan_frequency=10.0, resolution=360)
+        self.lidar = RotatingLidar(scan_frequency=lidar_frequency, resolution=360)
         self.sonar = SonarSensor(max_range=4.0, min_range=0.02)
         
         # Initialize motor controller
