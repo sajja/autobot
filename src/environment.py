@@ -2,6 +2,7 @@
 
 from typing import Tuple, List, Optional, Set, Callable
 from dataclasses import dataclass
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -479,35 +480,44 @@ class Environment:
                 print("="*60)
                 
                 if bot_instance:
+                    # Update bot's environment context
+                    if self.bot_position:
+                        bot_instance.position = (self.bot_position.x, self.bot_position.y)
+                        bot_instance.environment_bounds = (self.width, self.height)
+                    
                     # Initialize bot
                     if not bot_instance.is_initialized:
                         bot_instance.initialize()
                     
-                    # Start LIDAR scan
-                    print("\n--- Starting LIDAR Scan ---")
-                    scan_data = bot_instance.get_lidar_scan()
+                    # Define callback for continuous LIDAR scans
+                    def lidar_scan_callback(scan_data):
+                        """Called on each LIDAR scan."""
+                        print(f"\n[LIDAR Scan #{bot_instance.lidar._scan_count}] {len(scan_data)} points at {time.time():.2f}")
+                        
+                        # Show sample of scan data (first 5 readings)
+                        if bot_instance.lidar._scan_count == 1:
+                            print("-" * 60)
+                            print(f"{'Angle (°)':>12} {'Distance (m)':>15} {'Intensity':>15}")
+                            print("-" * 60)
+                            for i in range(min(5, len(scan_data))):
+                                reading = scan_data[i]
+                                print(f"{reading.angle:>12.0f} {reading.distance:>15.2f} {reading.intensity:>15}")
+                            print("..." + " " * 53 + "...")
+                            print(f"Continuous scanning at {bot_instance.lidar.scan_frequency}Hz...")
                     
-                    # Display scan data in table format
-                    print(f"\nLIDAR Scan Results (Total: {len(scan_data)} readings)")
-                    print(f"Scan Frequency: {bot_instance.lidar.scan_frequency} Hz")
-                    print("-" * 60)
-                    print(f"{'Angle (°)':>12} {'Distance (m)':>15} {'Intensity':>15}")
-                    print("-" * 60)
+                    # Start bot with continuous LIDAR scanning
+                    print("\n--- Starting Continuous LIDAR Scanning ---")
+                    bot_instance.start(lidar_callback=lidar_scan_callback)
                     
-                    # Show first 10, middle 5, and last 10 readings
-                    show_indices = list(range(10)) + list(range(175, 180)) + list(range(350, 360))
+                    # Get initial scan for display
+                    time.sleep(0.5)  # Wait for first scan
+                    scan_data = bot_instance.get_latest_lidar_scan()
                     
-                    for i in show_indices:
-                        if i < len(scan_data):
-                            reading = scan_data[i]
-                            print(f"{reading.angle:>12.0f} {reading.distance:>15.2f} {reading.intensity:>15}")
-                            if i == 9:
-                                print("..." + " " * 53 + "...")
-                            elif i == 179:
-                                print("..." + " " * 53 + "...")
-                    
-                    print("-" * 60)
-                    print(f"Scan completed at {scan_data[0].timestamp:.2f}")
+                    if scan_data:
+                        print(f"\nInitial scan: {len(scan_data)} readings")
+                    else:
+                        scan_data = []
+                        print("\nWaiting for first scan...")
                     
                     # Update bot to BLUE (running)
                     if bot_circle and self.bot_position:
@@ -544,7 +554,7 @@ class Environment:
                     info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
                     info_text_updated += f"Resolution: {self.resolution}m\n"
                     info_text_updated += f"Obstacles: {len(self.obstacles)}\n"
-                    info_text_updated += f"Status: Running\nLIDAR: Active ({len(scan_data)} pts)"
+                    info_text_updated += f"Status: Running\nLIDAR: Scanning at {bot_instance.lidar.scan_frequency}Hz"
                     info_box.set_text(info_text_updated)
                     
                     # Change button to GREEN "Stop Bot"

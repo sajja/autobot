@@ -1,7 +1,8 @@
 """Sensor classes for the autonomous vehicle."""
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Callable
 import time
+import threading
 from dataclasses import dataclass
 
 
@@ -37,6 +38,18 @@ class RotatingLidar:
         self.scan_period = 1.0 / scan_frequency
         self._is_scanning = False
         self._current_angle = 0.0
+        
+        # Environment context (set by bot/environment)
+        self.position = None  # (x, y) tuple
+        self.environment_bounds = None  # (width, height) tuple
+        
+        # Continuous scanning support
+        self._scan_thread = None
+        self._stop_continuous_scan = threading.Event()
+        self._latest_scan = None
+        self._scan_lock = threading.Lock()
+        self._scan_callback = None
+        self._scan_count = 0
     
     def start_scanning(self) -> None:
         """Start the LIDAR scanning process."""
@@ -46,7 +59,74 @@ class RotatingLidar:
     def stop_scanning(self) -> None:
         """Stop the LIDAR scanning process."""
         self._is_scanning = False
+        self.stop_continuous_scan()
         print("LIDAR: Stopped scanning")
+    
+    def start_continuous_scan(self, callback: Optional[Callable[[List[LidarReading]], None]] = None) -> None:
+        """
+        Start continuous asynchronous LIDAR scanning in background thread.
+        
+        Args:
+            callback: Optional callback function called after each scan with scan data
+        """
+        if self._scan_thread and self._scan_thread.is_alive():
+            print("LIDAR: Continuous scan already running")
+            return
+        
+        self._scan_callback = callback
+        self._stop_continuous_scan.clear()
+        self._is_scanning = True
+        self._scan_count = 0
+        
+        self._scan_thread = threading.Thread(target=self._continuous_scan_loop, daemon=True)
+        self._scan_thread.start()
+        print(f"LIDAR: Started continuous scanning at {self.scan_frequency}Hz")
+    
+    def stop_continuous_scan(self) -> None:
+        """Stop continuous LIDAR scanning."""
+        if not self._scan_thread or not self._scan_thread.is_alive():
+            return
+        
+        self._stop_continuous_scan.set()
+        self._scan_thread.join(timeout=2.0)
+        self._scan_thread = None
+        print(f"LIDAR: Stopped continuous scanning (completed {self._scan_count} scans)")
+    
+    def _continuous_scan_loop(self) -> None:
+        """Background thread loop for continuous scanning."""
+        while not self._stop_continuous_scan.is_set():
+            scan_start = time.time()
+            
+            # Perform scan
+            scan_data = self.get_scan()
+            self._scan_count += 1
+            
+            # Store latest scan
+            with self._scan_lock:
+                self._latest_scan = scan_data
+            
+            # Call callback if provided
+            if self._scan_callback:
+                try:
+                    self._scan_callback(scan_data)
+                except Exception as e:
+                    print(f"LIDAR: Error in scan callback: {e}")
+            
+            # Wait for next scan period
+            elapsed = time.time() - scan_start
+            sleep_time = max(0, self.scan_period - elapsed)
+            if sleep_time > 0:
+                self._stop_continuous_scan.wait(sleep_time)
+    
+    def get_latest_scan(self) -> Optional[List[LidarReading]]:
+        """
+        Get the most recent scan from continuous scanning.
+        
+        Returns:
+            Latest scan data or None if no scan available
+        """
+        with self._scan_lock:
+            return self._latest_scan
     
     def get_scan(self) -> List[LidarReading]:
         """
@@ -73,6 +153,7 @@ class RotatingLidar:
     def _simulate_reading(self, angle: float) -> Tuple[float, int]:
         """
         Simulate a LIDAR reading (placeholder for actual sensor reading).
+        When there are no obstacles, returns distance to environment boundary.
         
         Args:
             angle: Angle in degrees
@@ -80,14 +161,73 @@ class RotatingLidar:
         Returns:
             Tuple of (distance in meters, intensity 0-255)
         """
-        import random
-        # Placeholder implementation - simulate distance within max_range
-        # Vary distance between 1m and max_range (10m)
-        distance = random.uniform(1.0, self.max_range)
-        # Intensity decreases with distance (simulated)
-        base_intensity = 200 - int((distance / self.max_range) * 100)
-        intensity = max(50, min(255, int(base_intensity + random.uniform(-20, 20))))
+        import math
+        
+        # If no environment context, return 0 (no obstacles, infinite space)
+        if self.position is None or self.environment_bounds is None:
+            return 0.0, 0
+        
+        x, y = self.position
+        env_width, env_height = self.environment_bounds
+        
+        # Convert angle to radians
+        angle_rad = math.radians(angle)
+        
+        # Calculate direction vector
+        dx = math.cos(angle_rad)
+        dy = math.sin(angle_rad)
+        
+        # Calculate distance to each wall
+        distances = []
+        
+        # Right wall (x = env_width)
+        if dx > 0:
+            t = (env_width - x) / dx
+            distances.append(t)
+        
+        # Left wall (x = 0)
+        if dx < 0:
+            t = -x / dx
+            distances.append(t)
+        
+        # Top wall (y = env_height)
+        if dy > 0:
+            t = (env_height - y) / dy
+            distances.append(t)
+        
+        # Bottom wall (y = 0)
+        if dy < 0:
+            t = -y / dy
+            distances.append(t)
+        
+        # Get minimum positive distance (nearest wall)
+        valid_distances = [d for d in distances if d > 0]
+        if not valid_distances:
+            return 0.0, 0
+        
+        distance = min(valid_distances)
+        
+        # Clamp to max range (LIDAR cannot see beyond max_range)
+        if distance > self.max_range:
+            distance = 0.0  # No detection beyond max range
+            intensity = 0
+        else:
+            # Intensity decreases with distance
+            base_intensity = 200 - int((distance / self.max_range) * 100)
+            intensity = max(50, min(255, base_intensity))
+        
         return distance, intensity
+    
+    def set_environment_context(self, position: Tuple[float, float], env_bounds: Tuple[float, float]) -> None:
+        """
+        Set the environment context for realistic LIDAR simulation.
+        
+        Args:
+            position: Current (x, y) position of the LIDAR sensor
+            env_bounds: Environment (width, height) in meters
+        """
+        self.position = position
+        self.environment_bounds = env_bounds
     
     @property
     def is_scanning(self) -> bool:

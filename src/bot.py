@@ -1,6 +1,6 @@
 """Bot class - Autonomous vehicle with sensors and motors."""
 
-from typing import List, Optional
+from typing import List, Optional, Callable
 import time
 from .sensors import RotatingLidar, SonarSensor, LidarReading, SonarReading
 from .motors import MotorController
@@ -28,6 +28,10 @@ class Bot:
         # State variables
         self._initialized = False
         self._running = False
+        
+        # Environment context
+        self.position = None  # Set by environment
+        self.environment_bounds = None  # Set by environment
         
         print("Bot: Initialized")
     
@@ -72,7 +76,59 @@ class Bot:
         if not self._initialized:
             raise RuntimeError("Bot not initialized. Call initialize() first.")
         
+        # Update LIDAR with current position and environment context
+        if self.position and self.environment_bounds:
+            self.lidar.set_environment_context(self.position, self.environment_bounds)
+        
         return self.lidar.get_scan()
+    
+    def start(self, lidar_callback: Optional[Callable[[List[LidarReading]], None]] = None) -> None:
+        """
+        Start the bot with continuous LIDAR scanning.
+        
+        Args:
+            lidar_callback: Optional callback function called after each LIDAR scan
+        """
+        if not self._initialized:
+            raise RuntimeError("Bot not initialized. Call initialize() first.")
+        
+        if self._running:
+            print("Bot: Already running")
+            return
+        
+        # Update LIDAR with current position and environment context
+        if self.position and self.environment_bounds:
+            self.lidar.set_environment_context(self.position, self.environment_bounds)
+        
+        # Start continuous LIDAR scanning
+        self.lidar.start_continuous_scan(callback=lidar_callback)
+        
+        self._running = True
+        print("Bot: Started with continuous LIDAR scanning")
+    
+    def stop(self) -> None:
+        """Stop the bot and continuous scanning."""
+        if not self._running:
+            print("Bot: Already stopped")
+            return
+        
+        # Stop continuous LIDAR scanning
+        self.lidar.stop_continuous_scan()
+        
+        # Stop all motors
+        self.motors.stop_all()
+        
+        self._running = False
+        print("Bot: Stopped")
+    
+    def get_latest_lidar_scan(self) -> Optional[List[LidarReading]]:
+        """
+        Get the most recent LIDAR scan from continuous scanning.
+        
+        Returns:
+            Latest scan data or None if no scan available
+        """
+        return self.lidar.get_latest_scan()
     
     def check_obstacles(self, threshold: float = 0.5) -> bool:
         """
