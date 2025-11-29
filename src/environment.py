@@ -481,6 +481,18 @@ class Environment:
         ax_move_button = plt.axes([0.18, 0.02, 0.15, 0.05])
         btn_move_bot = Button(ax_move_button, 'Move Bot', color='lightgreen', hovercolor='green')
         
+        # Add Reset Environment button (ORANGE) - second row
+        ax_reset_button = plt.axes([0.69, 0.02, 0.15, 0.05])
+        btn_reset = Button(ax_reset_button, 'Reset Env', color='lightsalmon', hovercolor='orange')
+        
+        # Add Horizontal Wall button (PURPLE) - second row
+        ax_h_wall_button = plt.axes([0.18, 0.08, 0.15, 0.05])
+        btn_h_wall = Button(ax_h_wall_button, 'H-Wall', color='plum', hovercolor='purple')
+        
+        # Add Vertical Wall button (PURPLE) - second row
+        ax_v_wall_button = plt.axes([0.35, 0.08, 0.15, 0.05])
+        btn_v_wall = Button(ax_v_wall_button, 'V-Wall', color='plum', hovercolor='purple')
+        
         # Track placed obstacles (circles and center points)
         obstacle_patches = []
         obstacle_patch_centers = []
@@ -491,6 +503,9 @@ class Environment:
         # Track placement mode
         placement_mode = [False]  # Use list to allow modification in nested function
         move_bot_mode = [False]  # Track if in bot movement mode
+        h_wall_mode = [False]  # Track horizontal wall placement mode
+        v_wall_mode = [False]  # Track vertical wall placement mode
+        wall_lines = []  # Track wall line objects for removal
         
         # Move Bot button handler
         def on_move_bot_clicked(event):
@@ -543,6 +558,150 @@ class Environment:
                 btn_place_obj.hovercolor = 'blue'
                 btn_place_obj.label.set_text('Place Object')
                 print("\n❌ Placement mode deactivated")
+            
+            plt.draw()
+        
+        # Reset Environment button handler
+        def on_reset_clicked(event):
+            """Clear all obstacles from the environment."""
+            nonlocal obstacle_patches, obstacle_patch_centers, obstacle_circles, obstacle_centers, wall_lines
+            
+            if bot_running:
+                print("\n⚠️  Cannot reset environment while bot is running! Stop the bot first.")
+                return
+            
+            print("\n🧹 RESETTING ENVIRONMENT...")
+            
+            # Remove all obstacle patches from plot
+            for circle in obstacle_patches:
+                try:
+                    circle.remove()
+                except:
+                    pass
+            for center in obstacle_patch_centers:
+                try:
+                    center.remove()
+                except:
+                    pass
+            
+            # Clear obstacle lists
+            obstacle_patches.clear()
+            obstacle_patch_centers.clear()
+            
+            # Also clear the main obstacle tracking lists
+            for circle in obstacle_circles:
+                try:
+                    circle.remove()
+                except:
+                    pass
+            for center in obstacle_centers:
+                try:
+                    center.remove()
+                except:
+                    pass
+            obstacle_circles.clear()
+            obstacle_centers.clear()
+            
+            # Remove all wall lines
+            for wall_line in wall_lines:
+                try:
+                    wall_line.remove()
+                except:
+                    pass
+            wall_lines.clear()
+            
+            # Clear obstacles from environment
+            self.remove_all_obstacles()
+            
+            # Update info box
+            info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
+            info_text_updated += f"Resolution: {self.resolution}m\n"
+            info_text_updated += f"Obstacles: {len(self.obstacles)}\n"
+            info_text_updated += f"Status: Stopped"
+            info_box.set_text(info_text_updated)
+            
+            plt.draw()
+            print("✅ Environment reset complete - all obstacles removed")
+        
+        # Horizontal Wall button handler
+        def on_h_wall_clicked(event):
+            """Toggle horizontal wall placement mode."""
+            if bot_running:
+                print("\n⚠️  Cannot place walls while bot is running! Stop the bot first.")
+                return
+            
+            # Deactivate other modes
+            if placement_mode[0]:
+                placement_mode[0] = False
+                btn_place_obj.color = 'lightblue'
+                btn_place_obj.hovercolor = 'blue'
+                btn_place_obj.label.set_text('Place Object')
+            
+            if move_bot_mode[0]:
+                move_bot_mode[0] = False
+                btn_move_bot.color = 'lightgreen'
+                btn_move_bot.hovercolor = 'green'
+                btn_move_bot.label.set_text('Move Bot')
+            
+            if v_wall_mode[0]:
+                v_wall_mode[0] = False
+                btn_v_wall.color = 'plum'
+                btn_v_wall.hovercolor = 'purple'
+                btn_v_wall.label.set_text('V-Wall')
+            
+            h_wall_mode[0] = not h_wall_mode[0]
+            
+            if h_wall_mode[0]:
+                btn_h_wall.color = 'yellow'
+                btn_h_wall.hovercolor = 'orange'
+                btn_h_wall.label.set_text('Click to Place')
+                print("\n━ HORIZONTAL WALL MODE: Click on plot to place a horizontal wall")
+            else:
+                btn_h_wall.color = 'plum'
+                btn_h_wall.hovercolor = 'purple'
+                btn_h_wall.label.set_text('H-Wall')
+                print("\n❌ Horizontal wall mode deactivated")
+            
+            plt.draw()
+        
+        # Vertical Wall button handler
+        def on_v_wall_clicked(event):
+            """Toggle vertical wall placement mode."""
+            if bot_running:
+                print("\n⚠️  Cannot place walls while bot is running! Stop the bot first.")
+                return
+            
+            # Deactivate other modes
+            if placement_mode[0]:
+                placement_mode[0] = False
+                btn_place_obj.color = 'lightblue'
+                btn_place_obj.hovercolor = 'blue'
+                btn_place_obj.label.set_text('Place Object')
+            
+            if move_bot_mode[0]:
+                move_bot_mode[0] = False
+                btn_move_bot.color = 'lightgreen'
+                btn_move_bot.hovercolor = 'green'
+                btn_move_bot.label.set_text('Move Bot')
+            
+            if h_wall_mode[0]:
+                h_wall_mode[0] = False
+                btn_h_wall.color = 'plum'
+                btn_h_wall.hovercolor = 'purple'
+                btn_h_wall.label.set_text('H-Wall')
+            
+            v_wall_mode[0] = not v_wall_mode[0]
+            
+            if v_wall_mode[0]:
+                btn_v_wall.color = 'yellow'
+                btn_v_wall.hovercolor = 'orange'
+                btn_v_wall.label.set_text('Click to Place')
+                print("\n┃ VERTICAL WALL MODE: Click on plot to place a vertical wall")
+            else:
+                btn_v_wall.color = 'plum'
+                btn_v_wall.hovercolor = 'purple'
+                btn_v_wall.label.set_text('V-Wall')
+                print("\n❌ Vertical wall mode deactivated")
             
             plt.draw()
         
@@ -628,6 +787,160 @@ class Environment:
                 
                 return
             
+            # Handle horizontal wall placement
+            if h_wall_mode[0]:
+                wall_length = 3.0  # 3 meters long
+                wall_thickness = 0.1  # 10cm radius for obstacles
+                
+                print(f"\n━ Placing horizontal wall at y={y:.2f}")
+                
+                # Calculate wall start and end based on click position
+                start_x = max(0, x - wall_length / 2)
+                end_x = min(self.width, x + wall_length / 2)
+                
+                # Adjust if wall would go out of bounds
+                if end_x - start_x < wall_length:
+                    if start_x == 0:
+                        end_x = min(self.width, start_x + wall_length)
+                    else:
+                        start_x = max(0, end_x - wall_length)
+                
+                # Create wall as a series of small obstacles
+                num_obstacles = int(wall_length / (wall_thickness * 2))
+                spacing = (end_x - start_x) / num_obstacles
+                
+                wall_obstacles_created = 0
+                for i in range(num_obstacles + 1):
+                    obstacle_x = start_x + i * spacing
+                    obstacle_y = y
+                    
+                    # Check if position is valid
+                    if self.is_valid_position(obstacle_x, obstacle_y):
+                        # Check distance to bot
+                        safe = True
+                        if self.bot_position:
+                            dist_to_bot = np.sqrt((obstacle_x - self.bot_position.x)**2 + 
+                                                 (obstacle_y - self.bot_position.y)**2)
+                            if dist_to_bot < 0.5:
+                                safe = False
+                        
+                        if safe:
+                            success = self.add_obstacle(obstacle_x, obstacle_y, radius=wall_thickness)
+                            if success:
+                                # Draw obstacle
+                                obstacle_circle = Circle((obstacle_x, obstacle_y), wall_thickness,
+                                                       color='black', alpha=0.6)
+                                ax.add_patch(obstacle_circle)
+                                obstacle_patches.append(obstacle_circle)
+                                obstacle_circles.append(obstacle_circle)
+                                
+                                # Add center point (smaller for wall segments)
+                                center_pt = ax.plot(obstacle_x, obstacle_y, 'kx', markersize=4)[0]
+                                obstacle_patch_centers.append(center_pt)
+                                obstacle_centers.append(center_pt)
+                                
+                                wall_obstacles_created += 1
+                
+                # Draw a line to show the wall visually
+                wall_line = ax.plot([start_x, end_x], [y, y], 'k-', linewidth=3, alpha=0.8)[0]
+                wall_lines.append(wall_line)
+                
+                # Update info box
+                info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
+                info_text_updated += f"Resolution: {self.resolution}m\n"
+                info_text_updated += f"Obstacles: {len(self.obstacles)}\n"
+                info_text_updated += f"Status: Stopped"
+                info_box.set_text(info_text_updated)
+                
+                plt.draw()
+                print(f"✅ Horizontal wall placed: {wall_obstacles_created} segments from ({start_x:.2f}, {y:.2f}) to ({end_x:.2f}, {y:.2f})")
+                
+                # Auto-deactivate after placing
+                h_wall_mode[0] = False
+                btn_h_wall.color = 'plum'
+                btn_h_wall.hovercolor = 'purple'
+                btn_h_wall.label.set_text('H-Wall')
+                plt.draw()
+                
+                return
+            
+            # Handle vertical wall placement
+            if v_wall_mode[0]:
+                wall_length = 3.0  # 3 meters long
+                wall_thickness = 0.1  # 10cm radius for obstacles
+                
+                print(f"\n┃ Placing vertical wall at x={x:.2f}")
+                
+                # Calculate wall start and end based on click position
+                start_y = max(0, y - wall_length / 2)
+                end_y = min(self.height, y + wall_length / 2)
+                
+                # Adjust if wall would go out of bounds
+                if end_y - start_y < wall_length:
+                    if start_y == 0:
+                        end_y = min(self.height, start_y + wall_length)
+                    else:
+                        start_y = max(0, end_y - wall_length)
+                
+                # Create wall as a series of small obstacles
+                num_obstacles = int(wall_length / (wall_thickness * 2))
+                spacing = (end_y - start_y) / num_obstacles
+                
+                wall_obstacles_created = 0
+                for i in range(num_obstacles + 1):
+                    obstacle_x = x
+                    obstacle_y = start_y + i * spacing
+                    
+                    # Check if position is valid
+                    if self.is_valid_position(obstacle_x, obstacle_y):
+                        # Check distance to bot
+                        safe = True
+                        if self.bot_position:
+                            dist_to_bot = np.sqrt((obstacle_x - self.bot_position.x)**2 + 
+                                                 (obstacle_y - self.bot_position.y)**2)
+                            if dist_to_bot < 0.5:
+                                safe = False
+                        
+                        if safe:
+                            success = self.add_obstacle(obstacle_x, obstacle_y, radius=wall_thickness)
+                            if success:
+                                # Draw obstacle
+                                obstacle_circle = Circle((obstacle_x, obstacle_y), wall_thickness,
+                                                       color='black', alpha=0.6)
+                                ax.add_patch(obstacle_circle)
+                                obstacle_patches.append(obstacle_circle)
+                                obstacle_circles.append(obstacle_circle)
+                                
+                                # Add center point (smaller for wall segments)
+                                center_pt = ax.plot(obstacle_x, obstacle_y, 'kx', markersize=4)[0]
+                                obstacle_patch_centers.append(center_pt)
+                                obstacle_centers.append(center_pt)
+                                
+                                wall_obstacles_created += 1
+                
+                # Draw a line to show the wall visually
+                wall_line = ax.plot([x, x], [start_y, end_y], 'k-', linewidth=3, alpha=0.8)[0]
+                wall_lines.append(wall_line)
+                
+                # Update info box
+                info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
+                info_text_updated += f"Resolution: {self.resolution}m\n"
+                info_text_updated += f"Obstacles: {len(self.obstacles)}\n"
+                info_text_updated += f"Status: Stopped"
+                info_box.set_text(info_text_updated)
+                
+                plt.draw()
+                print(f"✅ Vertical wall placed: {wall_obstacles_created} segments from ({x:.2f}, {start_y:.2f}) to ({x:.2f}, {end_y:.2f})")
+                
+                # Auto-deactivate after placing
+                v_wall_mode[0] = False
+                btn_v_wall.color = 'plum'
+                btn_v_wall.hovercolor = 'purple'
+                btn_v_wall.label.set_text('V-Wall')
+                plt.draw()
+                
+                return
+            
             # Handle obstacle placement
             if not placement_mode[0]:
                 return  # Not in placement mode
@@ -687,6 +1000,9 @@ class Environment:
         # Connect event handlers
         btn_place_obj.on_clicked(on_place_object_clicked)
         btn_move_bot.on_clicked(on_move_bot_clicked)
+        btn_reset.on_clicked(on_reset_clicked)
+        btn_h_wall.on_clicked(on_h_wall_clicked)
+        btn_v_wall.on_clicked(on_v_wall_clicked)
         fig.canvas.mpl_connect('button_press_event', on_plot_click)
         
         # Button click handler
