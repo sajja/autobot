@@ -14,7 +14,9 @@ An autonomous vehicle simulation with LIDAR sensors, sonar, and motor control, f
 - Grid-based environment (customizable size)
 - GUI visualization with matplotlib
 - Interactive controls with button interface
-- Obstacle support (ready for expansion)
+- **Keyboard controls** for manual bot movement (arrow keys)
+- Obstacle support with collision detection
+- Wall detection with RED dot visualization
 
 📡 **LIDAR Scanning**
 - Angle: 0-359° (360 data points)
@@ -35,11 +37,15 @@ bot/
 │   ├── lidar_utils.py      # LIDAR data utilities
 │   └── main.py             # Demo application
 ├── examples/
-│   ├── simple_interactive.py  # Interactive GUI demo
-│   └── simple_gui.py          # Basic GUI example
+│   ├── keyboard_control_demo.py  # Keyboard control demo
+│   ├── wall_detection_demo.py    # Wall detection visualization
+│   ├── simple_interactive.py     # Interactive GUI demo
+│   └── simple_gui.py             # Basic GUI example
 ├── tests/                  # Test files
 ├── docs/
-│   └── INTERACTIVE_GUIDE.md   # Interactive feature guide
+│   ├── KEYBOARD_CONTROLS.md      # Keyboard control guide
+│   ├── RED_DOTS_WALL_DETECTION.md  # Wall detection guide
+│   └── INTERACTIVE_GUIDE.md      # Interactive feature guide
 ├── requirements.txt        # Dependencies
 └── README.md              # This file
 ```
@@ -66,16 +72,28 @@ pip install -r requirements.txt
 
 ### Run Interactive Demo
 
+**Basic Interactive Demo:**
 ```bash
 python3 examples/simple_interactive.py
+```
+
+**Keyboard Control Demo (Recommended):**
+```bash
+python3 examples/keyboard_control_demo.py
 ```
 
 **Instructions:**
 1. GUI window opens with environment visualization
 2. Bot appears as blue circle with direction arrow
-3. Click **"Start Bot"** button
-4. LIDAR scan runs and outputs data to console
-5. View scan results (360 readings: Angle, Distance, Intensity)
+3. Click **"Start Bot"** button (turns GREEN, bot turns BLUE)
+4. **Use arrow keys to control the bot:**
+   - ⬆️ UP: Move forward
+   - ⬇️ DOWN: Move backward
+   - ⬅️ LEFT: Rotate counter-clockwise
+   - ➡️ RIGHT: Rotate clockwise
+5. LIDAR continuously scans and outputs data to console
+6. Navigate to corners to see wall detection (RED dots)
+7. Add obstacles with "Place Object" button
 
 ### Run Basic Bot Demo
 
@@ -155,7 +173,10 @@ Angle (°)   Distance (m)   Intensity
 
 ## Documentation
 
-See [docs/INTERACTIVE_GUIDE.md](docs/INTERACTIVE_GUIDE.md) for detailed interactive features guide.
+- [Keyboard Controls Guide](docs/KEYBOARD_CONTROLS.md) - Complete keyboard control documentation
+- [Keyboard Quick Reference](KEYBOARD_QUICK_REFERENCE.md) - Quick reference for arrow keys
+- [Wall Detection Guide](docs/RED_DOTS_WALL_DETECTION.md) - Wall detection visualization
+- [Interactive Features](docs/INTERACTIVE_GUIDE.md) - Interactive GUI features
 
 ## Running Tests
 
