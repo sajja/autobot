@@ -42,6 +42,7 @@ class RotatingLidar:
         # Environment context (set by bot/environment)
         self.position = None  # (x, y) tuple
         self.environment_bounds = None  # (width, height) tuple
+        self.obstacles = []  # List of obstacles in environment
         
         # Continuous scanning support
         self._scan_thread = None
@@ -153,7 +154,7 @@ class RotatingLidar:
     def _simulate_reading(self, angle: float) -> Tuple[float, int]:
         """
         Simulate a LIDAR reading (placeholder for actual sensor reading).
-        When there are no obstacles, returns distance to environment boundary.
+        Checks both environment boundaries and obstacles.
         
         Args:
             angle: Angle in degrees
@@ -200,7 +201,39 @@ class RotatingLidar:
             t = -y / dy
             distances.append(t)
         
-        # Get minimum positive distance (nearest wall)
+        # Check for obstacles (circular obstacles)
+        for obstacle in self.obstacles:
+            obs_x = obstacle.position.x
+            obs_y = obstacle.position.y
+            obs_radius = obstacle.radius
+            
+            # Ray-circle intersection
+            # Ray: P = (x, y) + t * (dx, dy)
+            # Circle: (P_x - obs_x)^2 + (P_y - obs_y)^2 = obs_radius^2
+            
+            # Substitute ray into circle equation:
+            # (x + t*dx - obs_x)^2 + (y + t*dy - obs_y)^2 = obs_radius^2
+            
+            # Expand to quadratic: a*t^2 + b*t + c = 0
+            a = dx*dx + dy*dy
+            b = 2 * (dx*(x - obs_x) + dy*(y - obs_y))
+            c = (x - obs_x)**2 + (y - obs_y)**2 - obs_radius**2
+            
+            discriminant = b*b - 4*a*c
+            
+            if discriminant >= 0 and a != 0:
+                # Ray intersects circle
+                sqrt_disc = math.sqrt(discriminant)
+                t1 = (-b - sqrt_disc) / (2*a)
+                t2 = (-b + sqrt_disc) / (2*a)
+                
+                # We want the nearest positive intersection
+                if t1 > 0:
+                    distances.append(t1)
+                elif t2 > 0:
+                    distances.append(t2)
+        
+        # Get minimum positive distance (nearest wall or obstacle)
         valid_distances = [d for d in distances if d > 0]
         if not valid_distances:
             return 0.0, 0

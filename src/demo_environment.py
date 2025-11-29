@@ -1,6 +1,6 @@
 """Demo script for the environment."""
 
-from .environment import Environment, Position
+from environment import Environment, Position
 
 
 def demo_environment():

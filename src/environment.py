@@ -415,13 +415,17 @@ class Environment:
                              fill=False, edgecolor='black', linewidth=2)
         ax.add_patch(boundary)
         
-        # Draw obstacles
+        # Draw obstacles - keep track of patches for color updates
+        obstacle_circles = []
+        obstacle_centers = []
         for obstacle in self.obstacles:
             circle = Circle((obstacle.position.x, obstacle.position.y), 
                            obstacle.radius, 
-                           color='red', alpha=0.6)
+                           color='black', alpha=0.6)  # Start black (not detected)
             ax.add_patch(circle)
-            ax.plot(obstacle.position.x, obstacle.position.y, 'rx', markersize=8)
+            center_point = ax.plot(obstacle.position.x, obstacle.position.y, 'kx', markersize=8)[0]
+            obstacle_circles.append(circle)
+            obstacle_centers.append(center_point)
         
         # Draw bot if positioned (initially RED - stopped)
         bot_circle = None
@@ -466,8 +470,221 @@ class Environment:
                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
         
         # Add Start Bot button (RED initially)
-        ax_button = plt.axes([0.4, 0.02, 0.2, 0.05])
+        ax_button = plt.axes([0.35, 0.02, 0.15, 0.05])
         btn_control = Button(ax_button, 'Start Bot', color='lightcoral', hovercolor='red')
+        
+        # Add Place Object button (BLUE)
+        ax_obj_button = plt.axes([0.52, 0.02, 0.15, 0.05])
+        btn_place_obj = Button(ax_obj_button, 'Place Object', color='lightblue', hovercolor='blue')
+        
+        # Add Move Bot button (GREEN)
+        ax_move_button = plt.axes([0.18, 0.02, 0.15, 0.05])
+        btn_move_bot = Button(ax_move_button, 'Move Bot', color='lightgreen', hovercolor='green')
+        
+        # Track placed obstacles (circles and center points)
+        obstacle_patches = []
+        obstacle_patch_centers = []
+        
+        # Track placement mode
+        placement_mode = [False]  # Use list to allow modification in nested function
+        move_bot_mode = [False]  # Track if in bot movement mode
+        
+        # Move Bot button handler
+        def on_move_bot_clicked(event):
+            """Toggle move bot mode - click on plot to move bot."""
+            if bot_running:
+                print("\n⚠️  Cannot move bot while running! Stop the bot first.")
+                return
+            
+            move_bot_mode[0] = not move_bot_mode[0]
+            
+            if move_bot_mode[0]:
+                # Deactivate placement mode if active
+                if placement_mode[0]:
+                    placement_mode[0] = False
+                    btn_place_obj.color = 'lightblue'
+                    btn_place_obj.hovercolor = 'blue'
+                    btn_place_obj.label.set_text('Place Object')
+                
+                btn_move_bot.color = 'yellow'
+                btn_move_bot.hovercolor = 'orange'
+                btn_move_bot.label.set_text('Click to Move')
+                print("\n🤖 MOVE BOT MODE: Click on the plot to move the bot")
+            else:
+                btn_move_bot.color = 'lightgreen'
+                btn_move_bot.hovercolor = 'green'
+                btn_move_bot.label.set_text('Move Bot')
+                print("\n❌ Move bot mode deactivated")
+            
+            plt.draw()
+        
+        # Place Object button handler
+        def on_place_object_clicked(event):
+            """Toggle placement mode - click on plot to place obstacle."""
+            # Deactivate move bot mode if active
+            if move_bot_mode[0]:
+                move_bot_mode[0] = False
+                btn_move_bot.color = 'lightgreen'
+                btn_move_bot.hovercolor = 'green'
+                btn_move_bot.label.set_text('Move Bot')
+            
+            placement_mode[0] = not placement_mode[0]
+            
+            if placement_mode[0]:
+                btn_place_obj.color = 'yellow'
+                btn_place_obj.hovercolor = 'orange'
+                btn_place_obj.label.set_text('Click to Place')
+                print("\n🖱️  PLACEMENT MODE: Click on the plot to place a 30cm obstacle")
+            else:
+                btn_place_obj.color = 'lightblue'
+                btn_place_obj.hovercolor = 'blue'
+                btn_place_obj.label.set_text('Place Object')
+                print("\n❌ Placement mode deactivated")
+            
+            plt.draw()
+        
+        # Mouse click handler for placing obstacles and moving bot
+        def on_plot_click(event):
+            """Handle mouse clicks on the plot to place obstacles or move bot."""
+            nonlocal bot_circle, bot_arrow, bot_text, lidar_circle
+            
+            # Check if click is inside the main axes
+            if event.inaxes != ax:
+                return
+            
+            x, y = event.xdata, event.ydata
+            
+            # Handle bot movement
+            if move_bot_mode[0]:
+                # Check if within bounds
+                if not self.is_valid_position(x, y):
+                    print(f"\n❌ Position ({x:.2f}, {y:.2f}) is out of bounds")
+                    return
+                
+                # Check if position overlaps with obstacles
+                min_distance = 0.5  # Keep 0.5m from obstacles
+                for obstacle in self.obstacles:
+                    dist = np.sqrt((x - obstacle.position.x)**2 + (y - obstacle.position.y)**2)
+                    if dist < obstacle.radius + min_distance:
+                        print(f"\n❌ Too close to obstacle! Distance: {dist:.2f}m (min: {min_distance}m)")
+                        return
+                
+                # Move the bot
+                old_x = self.bot_position.x if self.bot_position else 0
+                old_y = self.bot_position.y if self.bot_position else 0
+                
+                success = self.set_bot_position(x, y, orientation=self.bot_orientation)
+                
+                if success:
+                    # Update bot visualization
+                    if bot_circle:
+                        bot_circle.remove()
+                    if bot_arrow:
+                        bot_arrow.remove()
+                    if bot_text:
+                        bot_text.remove()
+                    
+                    bot_size = 0.3
+                    # Bot is RED when stopped
+                    bot_circle = Circle((x, y), bot_size, 
+                                       color='red', alpha=0.7, label='Bot (Stopped)')
+                    ax.add_patch(bot_circle)
+                    
+                    arrow_length = bot_size * 1.5
+                    dx = arrow_length * np.cos(np.radians(self.bot_orientation))
+                    dy = arrow_length * np.sin(np.radians(self.bot_orientation))
+                    bot_arrow = ax.arrow(x, y, dx, dy, 
+                                        head_width=0.15, head_length=0.1, 
+                                        fc='darkred', ec='darkred', linewidth=2)
+                    
+                    bot_text = ax.text(x, y - bot_size - 0.3, 
+                                      f'Bot (STOPPED)\n({x:.1f}, {y:.1f})\n{self.bot_orientation:.0f}°',
+                                      ha='center', va='top', fontsize=9, 
+                                      bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.7))
+                    
+                    # Update LIDAR circle position if it exists
+                    if lidar_circle:
+                        lidar_circle.set_center((x, y))
+                    
+                    # Update bot instance position if it exists
+                    if bot_instance:
+                        bot_instance.position = (x, y)
+                        bot_instance.lidar.position = (x, y)
+                    
+                    plt.draw()
+                    print(f"\n✅ Bot moved from ({old_x:.2f}, {old_y:.2f}) to ({x:.2f}, {y:.2f})")
+                    
+                    # Auto-deactivate move mode after moving
+                    move_bot_mode[0] = False
+                    btn_move_bot.color = 'lightgreen'
+                    btn_move_bot.hovercolor = 'green'
+                    btn_move_bot.label.set_text('Move Bot')
+                    plt.draw()
+                else:
+                    print(f"\n❌ Could not move bot to ({x:.2f}, {y:.2f})")
+                
+                return
+            
+            # Handle obstacle placement
+            if not placement_mode[0]:
+                return  # Not in placement mode
+            
+            obj_size = 0.15  # 15cm radius (30cm diameter)
+            
+            # Check if within bounds
+            if not self.is_valid_position(x, y):
+                print(f"\n❌ Position ({x:.2f}, {y:.2f}) is out of bounds")
+                return
+            
+            # Check if too close to bot
+            if self.bot_position:
+                dist_to_bot = np.sqrt((x - self.bot_position.x)**2 + (y - self.bot_position.y)**2)
+                if dist_to_bot < 0.5:  # Keep 0.5m away from bot
+                    print(f"\n❌ Too close to bot! Distance: {dist_to_bot:.2f}m (min: 0.5m)")
+                    return
+            
+            # Place the obstacle
+            success = self.add_obstacle(x, y, radius=obj_size)
+            
+            if success:
+                # Draw the obstacle on the plot (black initially - not detected)
+                obstacle_circle = Circle((x, y), obj_size, 
+                                       color='black', alpha=0.6, label='Obstacle')
+                ax.add_patch(obstacle_circle)
+                obstacle_patches.append(obstacle_circle)
+                obstacle_circles.append(obstacle_circle)
+                
+                # Add center point
+                center_pt = ax.plot(x, y, 'kx', markersize=8)[0]
+                obstacle_patch_centers.append(center_pt)
+                obstacle_centers.append(center_pt)
+                
+                # Update info box
+                info_text_updated = f"Grid: {self.grid_width}×{self.grid_height}\n"
+                info_text_updated += f"Resolution: {self.resolution}m\n"
+                info_text_updated += f"Obstacles: {len(self.obstacles)}\n"
+                if bot_running:
+                    info_text_updated += f"Status: Running\nLIDAR: Scanning at {bot_instance.lidar.scan_frequency}Hz"
+                else:
+                    info_text_updated += f"Status: Stopped"
+                info_box.set_text(info_text_updated)
+                
+                plt.draw()
+                print(f"\n✅ Obstacle placed at ({x:.2f}, {y:.2f}) - Size: 30cm diameter")
+                
+                # Auto-deactivate placement mode after placing
+                placement_mode[0] = False
+                btn_place_obj.color = 'lightblue'
+                btn_place_obj.hovercolor = 'blue'
+                btn_place_obj.label.set_text('Place Object')
+                plt.draw()
+            else:
+                print(f"\n❌ Could not place obstacle at ({x:.2f}, {y:.2f})")
+        
+        # Connect event handlers
+        btn_place_obj.on_clicked(on_place_object_clicked)
+        btn_move_bot.on_clicked(on_move_bot_clicked)
+        fig.canvas.mpl_connect('button_press_event', on_plot_click)
         
         # Button click handler
         def on_button_clicked(event):
@@ -484,6 +701,10 @@ class Environment:
                     if self.bot_position:
                         bot_instance.position = (self.bot_position.x, self.bot_position.y)
                         bot_instance.environment_bounds = (self.width, self.height)
+                        # Pass obstacles to LIDAR sensor
+                        bot_instance.lidar.position = bot_instance.position
+                        bot_instance.lidar.environment_bounds = bot_instance.environment_bounds
+                        bot_instance.lidar.obstacles = self.obstacles
                     
                     # Initialize bot
                     if not bot_instance.is_initialized:
@@ -493,6 +714,9 @@ class Environment:
                     def lidar_scan_callback(scan_data):
                         """Called on each LIDAR scan."""
                         print(f"\n[LIDAR Scan #{bot_instance.lidar._scan_count}] {len(scan_data)} points at {time.time():.2f}")
+                        
+                        # Update obstacle colors based on LIDAR detection
+                        update_obstacle_visibility(scan_data)
                         
                         # Show sample of scan data (first 5 readings)
                         if bot_instance.lidar._scan_count == 1:
@@ -504,6 +728,55 @@ class Environment:
                                 print(f"{reading.angle:>12.0f} {reading.distance:>15.2f} {reading.intensity:>15}")
                             print("..." + " " * 53 + "...")
                             print(f"Continuous scanning at {bot_instance.lidar.scan_frequency}Hz...")
+                    
+                    # Function to update obstacle visibility based on LIDAR detections
+                    def update_obstacle_visibility(scan_data):
+                        """Update obstacle colors: red if detected by LIDAR, black if not."""
+                        if not scan_data or not self.bot_position:
+                            return
+                        
+                        # Get detected positions from LIDAR scan
+                        detected_positions = set()
+                        bot_x = self.bot_position.x
+                        bot_y = self.bot_position.y
+                        
+                        for reading in scan_data:
+                            if reading.distance > 0 and reading.distance < bot_instance.lidar.max_range:
+                                # Calculate the position of the detected point
+                                angle_rad = np.radians(reading.angle)
+                                detected_x = bot_x + reading.distance * np.cos(angle_rad)
+                                detected_y = bot_y + reading.distance * np.sin(angle_rad)
+                                detected_positions.add((detected_x, detected_y))
+                        
+                        # Check each obstacle to see if it's detected
+                        for i, obstacle in enumerate(self.obstacles):
+                            obs_x = obstacle.position.x
+                            obs_y = obstacle.position.y
+                            obs_radius = obstacle.radius
+                            
+                            # Check if any detected point is within the obstacle's radius
+                            is_detected = False
+                            for det_x, det_y in detected_positions:
+                                dist = np.sqrt((det_x - obs_x)**2 + (det_y - obs_y)**2)
+                                if dist <= obs_radius + 0.1:  # Small tolerance
+                                    is_detected = True
+                                    break
+                            
+                            # Update obstacle color
+                            if i < len(obstacle_circles):
+                                if is_detected:
+                                    obstacle_circles[i].set_color('red')
+                                    obstacle_circles[i].set_alpha(0.7)
+                                    if i < len(obstacle_centers):
+                                        obstacle_centers[i].set_color('red')
+                                else:
+                                    obstacle_circles[i].set_color('black')
+                                    obstacle_circles[i].set_alpha(0.6)
+                                    if i < len(obstacle_centers):
+                                        obstacle_centers[i].set_color('black')
+                        
+                        # Redraw the plot
+                        plt.draw()
                     
                     # Start bot with continuous LIDAR scanning
                     print("\n--- Starting Continuous LIDAR Scanning ---")
@@ -586,6 +859,14 @@ class Environment:
                     # Stop the bot
                     bot_instance.stop()
                     print("Bot stopped!")
+                    
+                    # Reset all obstacles to black (not detected)
+                    for i, obstacle in enumerate(self.obstacles):
+                        if i < len(obstacle_circles):
+                            obstacle_circles[i].set_color('black')
+                            obstacle_circles[i].set_alpha(0.6)
+                            if i < len(obstacle_centers):
+                                obstacle_centers[i].set_color('black')
                     
                     # Update bot to RED (stopped)
                     if bot_circle and self.bot_position:
