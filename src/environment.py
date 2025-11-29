@@ -951,6 +951,141 @@ class Environment:
         
         btn_control.on_clicked(on_button_clicked)
         
+        # Keyboard control handler
+        def on_key_press(event):
+            """Handle keyboard controls for bot movement.
+            UP: Move forward
+            DOWN: Move backward
+            LEFT: Rotate counter-clockwise
+            RIGHT: Rotate clockwise
+            Bot can only move when running (started).
+            """
+            nonlocal bot_circle, bot_arrow, bot_text, lidar_circle, bot_running
+            
+            # Only allow movement when bot is running
+            if not bot_running:
+                print(f"\n⚠️  Bot must be started to move! (Key pressed: {event.key})")
+                return
+            
+            if not self.bot_position:
+                return
+            
+            # Movement parameters
+            move_distance = 0.5  # 0.5 meters per key press
+            rotation_angle = 15  # 15 degrees per key press
+            
+            old_x = self.bot_position.x
+            old_y = self.bot_position.y
+            old_orientation = self.bot_orientation
+            
+            moved = False
+            rotated = False
+            
+            if event.key == 'up':
+                # Move forward in the direction the bot is facing
+                dx = move_distance * np.cos(np.radians(self.bot_orientation))
+                dy = move_distance * np.sin(np.radians(self.bot_orientation))
+                new_x = old_x + dx
+                new_y = old_y + dy
+                
+                # Check boundaries
+                if 0 <= new_x <= self.width and 0 <= new_y <= self.height:
+                    # Check for obstacle collision
+                    new_pos = Position(new_x, new_y)
+                    if not self.is_position_occupied(new_pos):
+                        self.bot_position.x = new_x
+                        self.bot_position.y = new_y
+                        moved = True
+                        print(f"🔼 Forward: ({old_x:.2f}, {old_y:.2f}) → ({new_x:.2f}, {new_y:.2f})")
+                    else:
+                        print(f"⚠️  Cannot move forward - obstacle in the way!")
+                else:
+                    print(f"⚠️  Cannot move forward - would hit boundary!")
+                    
+            elif event.key == 'down':
+                # Move backward (opposite direction)
+                dx = move_distance * np.cos(np.radians(self.bot_orientation))
+                dy = move_distance * np.sin(np.radians(self.bot_orientation))
+                new_x = old_x - dx
+                new_y = old_y - dy
+                
+                # Check boundaries
+                if 0 <= new_x <= self.width and 0 <= new_y <= self.height:
+                    # Check for obstacle collision
+                    new_pos = Position(new_x, new_y)
+                    if not self.is_position_occupied(new_pos):
+                        self.bot_position.x = new_x
+                        self.bot_position.y = new_y
+                        moved = True
+                        print(f"🔽 Backward: ({old_x:.2f}, {old_y:.2f}) → ({new_x:.2f}, {new_y:.2f})")
+                    else:
+                        print(f"⚠️  Cannot move backward - obstacle in the way!")
+                else:
+                    print(f"⚠️  Cannot move backward - would hit boundary!")
+                    
+            elif event.key == 'left':
+                # Rotate counter-clockwise (increase angle)
+                self.bot_orientation = (self.bot_orientation + rotation_angle) % 360
+                rotated = True
+                print(f"↺ Rotate Left: {old_orientation:.0f}° → {self.bot_orientation:.0f}°")
+                
+            elif event.key == 'right':
+                # Rotate clockwise (decrease angle)
+                self.bot_orientation = (self.bot_orientation - rotation_angle) % 360
+                rotated = True
+                print(f"↻ Rotate Right: {old_orientation:.0f}° → {self.bot_orientation:.0f}°")
+            
+            # Update visualization if bot moved or rotated
+            if moved or rotated:
+                # Update bot instance position
+                if bot_instance:
+                    bot_instance.position = (self.bot_position.x, self.bot_position.y)
+                    bot_instance.lidar.position = bot_instance.position
+                
+                # Update bot circle position
+                if bot_circle:
+                    bot_circle.center = (self.bot_position.x, self.bot_position.y)
+                
+                # Update LIDAR circle position
+                if lidar_circle:
+                    lidar_circle.center = (self.bot_position.x, self.bot_position.y)
+                
+                # Remove and redraw arrow with new orientation
+                if bot_arrow:
+                    bot_arrow.remove()
+                
+                bot_size = 0.3
+                arrow_length = bot_size * 1.5
+                dx = arrow_length * np.cos(np.radians(self.bot_orientation))
+                dy = arrow_length * np.sin(np.radians(self.bot_orientation))
+                
+                # Color based on running state (should be blue since bot is running)
+                bot_arrow = ax.arrow(self.bot_position.x, self.bot_position.y, dx, dy,
+                                   head_width=0.15, head_length=0.1,
+                                   fc='darkblue', ec='darkblue', linewidth=2)
+                
+                # Update text position and content
+                if bot_text:
+                    bot_text.set_position((self.bot_position.x, self.bot_position.y - bot_size - 0.3))
+                    bot_text.set_text(f'Bot (RUNNING)\n({self.bot_position.x:.1f}, {self.bot_position.y:.1f})\n{self.bot_orientation:.0f}°')
+                
+                # Redraw the canvas
+                fig.canvas.draw_idle()
+        
+        # Connect keyboard event
+        fig.canvas.mpl_connect('key_press_event', on_key_press)
+        
+        # Add keyboard instructions to the plot
+        keyboard_info = "🎮 Keyboard Controls (when running):\n"
+        keyboard_info += "  ⬆️  UP    = Move Forward\n"
+        keyboard_info += "  ⬇️  DOWN  = Move Backward\n"
+        keyboard_info += "  ⬅️  LEFT  = Rotate Left\n"
+        keyboard_info += "  ➡️  RIGHT = Rotate Right"
+        
+        ax.text(0.98, 0.98, keyboard_info, transform=ax.transAxes,
+               fontsize=8, verticalalignment='top', horizontalalignment='right',
+               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+        
         plt.tight_layout()
         plt.show()
     
