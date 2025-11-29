@@ -485,6 +485,9 @@ class Environment:
         obstacle_patches = []
         obstacle_patch_centers = []
         
+        # Track LIDAR wall detection points
+        wall_detection_markers = []
+        
         # Track placement mode
         placement_mode = [False]  # Use list to allow modification in nested function
         move_bot_mode = [False]  # Track if in bot movement mode
@@ -732,11 +735,19 @@ class Environment:
                     # Function to update obstacle visibility based on LIDAR detections
                     def update_obstacle_visibility(scan_data):
                         """Update obstacle colors: red if detected by LIDAR, black if not."""
+                        nonlocal wall_detection_markers
+                        
                         if not scan_data or not self.bot_position:
                             return
                         
+                        # Clear previous wall detection markers
+                        for marker in wall_detection_markers:
+                            marker.remove()
+                        wall_detection_markers.clear()
+                        
                         # Get detected positions from LIDAR scan
-                        detected_positions = set()
+                        detected_positions = []
+                        wall_detections = []
                         bot_x = self.bot_position.x
                         bot_y = self.bot_position.y
                         
@@ -746,7 +757,36 @@ class Environment:
                                 angle_rad = np.radians(reading.angle)
                                 detected_x = bot_x + reading.distance * np.cos(angle_rad)
                                 detected_y = bot_y + reading.distance * np.sin(angle_rad)
-                                detected_positions.add((detected_x, detected_y))
+                                
+                                # Check if this is a wall detection (near boundaries)
+                                is_wall = False
+                                tolerance = 0.2  # 20cm tolerance for wall detection
+                                
+                                if abs(detected_x - 0) < tolerance:  # Left wall
+                                    is_wall = True
+                                elif abs(detected_x - self.width) < tolerance:  # Right wall
+                                    is_wall = True
+                                elif abs(detected_y - 0) < tolerance:  # Bottom wall
+                                    is_wall = True
+                                elif abs(detected_y - self.height) < tolerance:  # Top wall
+                                    is_wall = True
+                                
+                                if is_wall:
+                                    wall_detections.append((detected_x, detected_y))
+                                
+                                detected_positions.append((detected_x, detected_y))
+                        
+                        # Plot wall detections as RED dots (highly visible)
+                        if wall_detections:
+                            wall_x = [pos[0] for pos in wall_detections]
+                            wall_y = [pos[1] for pos in wall_detections]
+                            # RED dots, larger size for better visibility
+                            marker = ax.plot(wall_x, wall_y, 'ro', markersize=6, alpha=0.8, label='Wall Detection')[0]
+                            wall_detection_markers.append(marker)
+                            
+                            # Debug: Print wall detection count
+                            if bot_instance.lidar._scan_count == 1:
+                                print(f"� Wall detections: {len(wall_detections)} points plotted as RED dots")
                         
                         # Check each obstacle to see if it's detected
                         for i, obstacle in enumerate(self.obstacles):
@@ -859,6 +899,11 @@ class Environment:
                     # Stop the bot
                     bot_instance.stop()
                     print("Bot stopped!")
+                    
+                    # Clear wall detection markers
+                    for marker in wall_detection_markers:
+                        marker.remove()
+                    wall_detection_markers.clear()
                     
                     # Reset all obstacles to black (not detected)
                     for i, obstacle in enumerate(self.obstacles):
